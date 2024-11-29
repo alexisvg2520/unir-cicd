@@ -1,8 +1,9 @@
-# Detectar sistema operativo y ajustar rutas
+# Detectar sistema operativo y ajustar rutas para Docker
 OS := $(shell uname -s)
 ifeq ($(OS),Linux)
 	PATH_STYLE := $(CURDIR)
 else
+	# Convertir ruta de Windows a estilo Unix
 	PATH_STYLE := /$(subst :,,$(shell echo $(CURDIR) | sed 's/\\/\//g'))
 endif
 
@@ -20,7 +21,7 @@ test-unit:
 	docker stop unit-tests || true
 	docker rm unit-tests || true
 	docker run --name unit-tests --env PYTHONPATH=/workspace -w /workspace -v $(PATH_STYLE):/workspace calculator-app:latest pytest --cov --cov-report=xml:results/coverage.xml --cov-report=html:results/coverage --junit-xml=results/unit_result.xml -m unit || true
-	docker cp unit-tests:/workspace/results ./results
+	docker cp unit-tests:/workspace/results ./results || true
 	docker rm unit-tests || true
 
 test-api:
@@ -30,7 +31,7 @@ test-api:
 	docker rm apiserver || true
 	docker run -d --network calc-test-api --env PYTHONPATH=/workspace --name apiserver --env FLASK_APP=app/api.py -p 5000:5000 -v $(PATH_STYLE):/workspace -w /workspace calculator-app:latest flask run --host=0.0.0.0
 	docker run --network calc-test-api --name api-tests --env PYTHONPATH=/workspace --env BASE_URL=http://apiserver:5000/ -v $(PATH_STYLE):/workspace -w /workspace calculator-app:latest pytest --junit-xml=results/api_result.xml -m api || true
-	docker cp api-tests:/workspace/results ./results
+	docker cp api-tests:/workspace/results ./results || true
 	docker stop apiserver || true
 	docker rm apiserver || true
 	docker stop api-tests || true
