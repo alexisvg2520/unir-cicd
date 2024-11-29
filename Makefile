@@ -1,21 +1,24 @@
-# Detectar sistema operativo y ajustar rutas para Docker
+# Definir rutas dependiendo del sistema operativo
 OS := $(shell uname -s)
 ifeq ($(OS),Linux)
-	PATH_STYLE := $(CURDIR)
+    PATH_STYLE := $(CURDIR)
 else
-	# Convertir ruta de Windows a estilo Unix
-	PATH_STYLE := /$(subst :,,$(shell echo $(CURDIR) | sed 's/\\/\//g'))
+    # Convertir la ruta de Windows a formato Unisx compatible con Docker
+    PATH_STYLE := /c/ProgramData/Jenkins/.jenkins/workspace/PruebaPipe
 endif
 
 .PHONY: all build server test-unit test-api test-e2e run-web stop-web start-sonar-server stop-sonar-server start-sonar-scanner pylint deploy-stage
 
+# Construcción de imágenes Docker
 build:
 	docker build -t calculator-app .
 	docker build -t calc-web ./web
 
+# Ejecutar el servidor principal
 server:
 	docker run --rm --name apiserver --network-alias apiserver --env PYTHONPATH=/workspace --env FLASK_APP=app/api.py -p 5000:5000 -v $(PATH_STYLE):/workspace -w /workspace calculator-app:latest flask run --host=0.0.0.0
 
+# Pruebas unitarias
 test-unit:
 	@echo "Running Unit Tests..."
 	docker stop unit-tests || true
@@ -24,6 +27,7 @@ test-unit:
 	docker cp unit-tests:/workspace/results ./results || true
 	docker rm unit-tests || true
 
+# Pruebas de API
 test-api:
 	@echo "Running API Tests..."
 	docker network create calc-test-api || true
@@ -38,6 +42,7 @@ test-api:
 	docker rm api-tests || true
 	docker network rm calc-test-api || true
 
+# Pruebas End-to-End (E2E)
 test-e2e:
 	@echo "Running E2E Tests..."
 	docker network create calc-test-e2e || true
@@ -59,27 +64,34 @@ test-e2e:
 	docker rm e2e-tests || true
 	docker network rm calc-test-e2e || true
 
+# Ejecutar la aplicación web
 run-web:
 	docker run --rm -v $(PATH_STYLE)/web:/usr/share/nginx/html --name calc-web -p 80:80 nginx
 
+# Detener la aplicación web
 stop-web:
 	docker stop calc-web || true
 
+# Iniciar el servidor de SonarQube
 start-sonar-server:
 	docker network create calc-sonar || true
 	docker run -d --rm --stop-timeout 60 --network calc-sonar --name sonarqube-server -p 9000:9000 -v $(PATH_STYLE)/sonar/data:/opt/sonarqube/data -v $(PATH_STYLE)/sonar/logs:/opt/sonarqube/logs sonarqube:8.3.1-community
 
+# Detener el servidor de SonarQube
 stop-sonar-server:
 	docker stop sonarqube-server || true
 	docker network rm calc-sonar || true
 
+# Ejecutar el escáner de SonarQube
 start-sonar-scanner:
 	docker run --rm --network calc-sonar -v $(PATH_STYLE):/usr/src sonarsource/sonar-scanner-cli
 
+# Ejecutar Pylint
 pylint:
 	@echo "Running Pylint..."
 	docker run --rm -v $(PATH_STYLE):/workspace --env PYTHONPATH=/workspace -w /workspace calculator-app:latest pylint app/ | tee results/pylint_result.txt
 
+# Despliegue en entorno de pruebas (stage)
 deploy-stage:
 	docker stop apiserver || true
 	docker stop calc-web || true
